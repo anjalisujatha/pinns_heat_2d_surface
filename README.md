@@ -1,4 +1,4 @@
-# Physics-Informed Neural Networks for the 2D Heat Equation
+# PINNs for the 2D Heat Equation
 
 A three-phase progression of Physics-Informed Neural Networks (PINNs) solving the transient 2D heat equation — from a plain baseline network, through multi-scale Fourier feature embeddings, to a single parametric network that generalizes across an entire family of plate geometries without retraining.
 
