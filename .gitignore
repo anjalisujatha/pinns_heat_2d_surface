@@ -1,19 +1,12 @@
 # Python
 __pycache__/
-*.py[cod]
-*.so
 
 # Virtual environment
 .venv
-env/
-venv/
 
 # PyTorch artifacts (generated, not source)
 *.pt
 *.pth
-
-# IDE
-.idea/
 
 # macOS
 .DS_Store
@@ -23,21 +16,3 @@ venv/
 
 # Jupyter
 .ipynb_checkpoints
-
-# Test / coverage
-.pytest_cache/
-.coverage
-.coverage.*
-htmlcov/
-
-# Type checkers / linters
-.mypy_cache/
-.ruff_cache/
-
-# Distribution / packaging
-dist/
-build/
-*.egg-info/
-
-# Env vars
-.env

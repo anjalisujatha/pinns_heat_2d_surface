@@ -63,7 +63,7 @@ The project is structured as three progressively harder phases, each building on
 
 ## Implementation
 
-### Notebook 1 — `pinn_2d.ipynb` (Baseline PINN)
+### `pinn_2d.ipynb` (Baseline PINN)
 
 **PDE and domain.** The heat equation on the unit square [0,1]² over t ∈ [0, 0.1]. Single-mode IC: T(x,y,0) = sin(πx)sin(πy). Analytical solution: T(x,y,t) = sin(πx)sin(πy)·exp(−2π²t).
 
@@ -79,7 +79,7 @@ The project is structured as three progressively harder phases, each building on
 
 ---
 
-### Notebook 2 — `pinn_2d_fourier.ipynb` (Fourier Feature PINN)
+### `pinn_2d_fourier.ipynb` (Fourier Feature PINN)
 
 **PDE and domain.** Same heat equation on [0,1]² but with a harder two-mode IC: T(x,y,0) = sin(πx)sin(πy) + 0.3·sin(5πx)sin(5πy). Time window shortened to t ∈ [0, 0.01] because the high-frequency mode (λ₂=50π²≈493) decays to 0.2% of its initial amplitude by t=0.01. Analytical solution has both modes decaying at their respective rates.
 
@@ -95,7 +95,7 @@ The project is structured as three progressively harder phases, each building on
 
 ---
 
-### Notebook 3 — `pinn_2d_parametric.ipynb` (Parametric Domain PINN)
+### `pinn_2d_parametric.ipynb` (Parametric Domain PINN)
 
 **PDE and domain.** Same heat equation but on a variable domain [0,Lx]×[0,Ly] with Lx, Ly ∈ [0.5, 2.0]. IC adapted to plate dimensions: T(x,y,0) = sin(πx/Lx)sin(πy/Ly) + 0.3·sin(5πx/Lx)sin(5πy/Ly). Decay rates depend on geometry: λ₁=π²α(1/Lx²+1/Ly²), λ₂=25λ₁. A larger plate decays more slowly.
 
@@ -113,7 +113,7 @@ The project is structured as three progressively harder phases, each building on
 
 ## Conclusion
 
-### Phase 1 — Baseline PINN
+### Baseline PINN
 
 The plain 4,385-parameter network accurately solves the single-mode heat equation. At t=0.03, 0.05, 0.07 the relative L2 errors are 0.17%, 0.25%, and 0.27% respectively — sub-percent accuracy with no simulation data, purely from physics-based training.
 
@@ -127,7 +127,7 @@ The plain 4,385-parameter network accurately solves the single-mode heat equatio
 
 ---
 
-### Phase 2 — Fourier Feature PINN
+### Fourier Feature PINN
 
 Adding the high-frequency IC mode sin(5πx)sin(5πy) exposes the spectral bias of the plain MLP — it scores 18.6% L2 error at t=0.001 where the high-frequency component is strongest. The Fourier feature network reduces this to 0.60%, a 31× improvement. Gains are largest at early times when both modes are present and diminish at later times once the high-frequency mode has decayed.
 
@@ -141,7 +141,7 @@ Adding the high-frequency IC mode sin(5πx)sin(5πy) exposes the spectral bias o
 
 ---
 
-### Phase 3 — Parametric Domain PINN
+### Parametric Domain PINN
 
 A single 379,137-parameter network generalizes across all rectangular geometries with Lx,Ly ∈ [0.5, 2.0]. All nine test cases (3 geometries × 3 times) stay under 2% L2 error, with no retraining. The regression check confirms the unit-square case at 1.61% — a 2.7× accuracy cost relative to Phase 2's dedicated single-geometry training, which is the expected price of generalization across a 2D parameter space. The mesh comparison confirms the network's accuracy is coordinate-source agnostic: errors on Delaunay triangle mesh nodes differ from the regular grid by at most 0.1%.
 
@@ -158,22 +158,34 @@ A single 379,137-parameter network generalizes across all rectangular geometries
 
 ## Improvements
 
-- **3D extension.** The current formulation is limited to 2D plates. Extending to a 3D volume would require adding a z-coordinate and Lz as a fifth geometry parameter, and scaling up the network and collocation point budget accordingly. The architecture already separates spatial/temporal Fourier encoding from geometry parameters, so the extension is structurally straightforward.
+### 3D Extension
 
-- **Parameterizing thermal diffusivity.** α is fixed at 1.0. Making it an additional input (alongside Lx, Ly) would let the model generalize across materials, turning it into a true material-parametric surrogate.
+The current formulation is limited to 2D plates. Extending to a 3D volume would require adding a z-coordinate and Lz as a fifth geometry parameter, and scaling up the network and collocation point budget accordingly. The architecture already separates spatial/temporal Fourier encoding from geometry parameters, so the extension is structurally straightforward.
 
-- **Non-Dirichlet boundary conditions.** The project only handles T=0 Dirichlet conditions. Supporting Neumann (flux) or Robin (convective heat transfer) boundary conditions would cover a much broader range of engineering problems such as insulated surfaces and convective cooling.
+### Parameterizing Thermal Diffusivity
 
-- **Adaptive collocation sampling.** Interior points are drawn uniformly at random at every step. Methods like residual-based adaptive refinement (RAR) concentrate points where the PDE residual is largest, improving accuracy in regions with steep gradients for the same computational budget.
+α is fixed at 1.0. Making it an additional input (alongside Lx, Ly) would let the model generalize across materials, turning it into a true material-parametric surrogate.
 
-- **Learnable Fourier frequencies.** The random frequency matrices are frozen after initialization. Allowing them to be trainable — either by gradient descent or via a learned frequency selection scheme — could improve approximation of solutions that do not align well with randomly chosen frequencies.
+### Adaptive Collocation Sampling
 
-- **NVIDIA Modulus.** For production-scale parametric PINNs with GPU acceleration, NVIDIA Modulus provides optimized implementations of Fourier feature networks, adaptive sampling, and distributed training that go well beyond what a custom PyTorch loop can achieve on CPU.
+Interior points are drawn uniformly at random at every step. Methods like residual-based adaptive refinement (RAR) concentrate points where the PDE residual is largest, improving accuracy in regions with steep gradients for the same computational budget.
+
+### NVIDIA Modulus
+
+For production-scale parametric PINNs with GPU acceleration, NVIDIA Modulus provides optimized implementations of Fourier feature networks, adaptive sampling, and distributed training that go well beyond what a custom PyTorch loop can achieve on CPU.
 
 ---
 
-## Appendix
+## Appendix (other options explored)
 
-**Why not DeepXDE for Phase 3.** DeepXDE works well when the domain is fixed, but Phase 3 needs a new plate size at every training step. DeepXDE does not support that, so a plain PyTorch training loop was written instead — it does the same job in ~60 lines with full control over sampling.
+### DeepXDE for Parametric Domain
 
-**Why not random sampling inside L-BFGS.** L-BFGS checks the loss several times before taking each step to make sure it is actually improving. If the training points change between those checks, the loss values are not comparable and the optimizer gets confused and stops making progress. Fixing the points once before the optimizer runs avoids this.
+DeepXDE works well when the domain is fixed, but parametric domain needs a new plate size at every training step. DeepXDE does not support that, so a plain PyTorch training loop was written instead.
+
+### Random sampling inside L-BFGS
+
+L-BFGS checks the loss several times before taking each step to make sure it is actually improving. If the training points change between those checks, the loss values are not comparable and the optimizer gets confused and stops making progress. Fixing the points once before the optimizer runs avoids this.
+
+## LLMs Used
+1. Gemini (NotebookLM)
+2. Claude code
