@@ -156,6 +156,65 @@ A single 379,137-parameter network generalizes across all rectangular geometries
 
 ---
 
+## Out-of-Distribution (OOD) Study
+
+The trained parametric model was evaluated on three OOD cases to document its limits and test targeted fixes. Notebooks are in `notebooks/ood/`.
+
+### Failure Analysis (`pinn_2d_ood_failure.ipynb`)
+
+Three cases were tested. For each, both relative L2 error and PDE residual `|∂T/∂t − α∇²T|` were computed at OOD points to distinguish mathematical failure (MLP extrapolation) from physical violation (PDE not satisfied).
+
+**Case 1 — Geometry extrapolation (`Lx, Ly` outside `[0.5, 2.0]`)**
+The geometry normalization `lx_n = (Lx − 1.25) / 0.75` maps the training range to `[−1, 1]`. Outside this range, tanh activations saturate and the geometry conditioning collapses. Above the boundary (e.g. Lx=2.5), PDE residual stays low but L2 error rises — a mathematical MLP failure. Below the boundary (e.g. Lx=0.2), the PDE residual spikes to 61.9 — both math and physics break down due to deeper tanh saturation.
+
+| Geometry | L2 Error |
+|---|---|
+| In-dist 1.0×1.0 | 1.6% |
+| Near-OOD 0.3×1.0 | 4.3% |
+| Far-OOD 0.15×0.15 | 93% |
+
+**Case 2 — Temporal extrapolation (`t > T_MAX = 0.01`)**
+The sharpest failure. PDE residual jumps from 0.97 at T_MAX to 71.5 at the first OOD time step (t=0.015). The model plateaus rather than continuing to decay, causing `∂T/∂t ≈ 0` while `α∇²T ≠ 0` — a direct physics violation alongside the mathematical extrapolation failure.
+
+| t | L2 Error |
+|---|---|
+| T\_MAX (in-dist) | 1.4% |
+| 2×T\_MAX | 227% |
+| 5×T\_MAX | 543% |
+
+**Case 3 — Thermal diffusivity mismatch (`α ≠ 1.0`)**
+A silent failure. `α` is hardcoded into the PDE loss and is not a model input. The model's own PDE residual stays flat at ~1.7 regardless of the true α — it always satisfies `∂T/∂t = 1.0×∇²T` perfectly. But the residual against the true PDE rises to 118 at α=4. The output looks physically plausible with no detectable failure signal.
+
+| α | L2 Error |
+|---|---|
+| 0.25 | 7.8% |
+| 1.00 (in-dist) | 1.6% |
+| 4.00 | 16.8% |
+
+---
+
+### Fixes (`pinn_2d_ood_fixes.ipynb`)
+
+**Fix 1 — Specialized Transfer Learning (geometry)**
+One dedicated model per target geometry, initialized from the pretrained checkpoint and fine-tuned with `lr=1e-4` and cosine annealing for 10k steps on that geometry only. The original model is untouched. Works well for geometries just outside the boundary; improvement is larger above the bound than below due to asymmetric tanh gradient flow.
+
+| Geometry | Before | After | Improvement |
+|---|---|---|---|
+| Lx=0.2 (below bound) | 14.0% | 7.4% | 1.9× |
+| Lx=2.5 (above bound) | 2.77% | 0.57% | 4.9× |
+
+**Fix 2 — Moving Time Window (temporal)**
+A second model is trained on `t ∈ [T_MAX, 2×T_MAX]`. Time is shifted as `t' = t − T_MAX` so the normalization stays in `[−1, 1]`. The IC at `t'=0` is window 1's output at T_MAX. Windows can be chained to extend the time horizon further.
+
+| t | Before (W1 extrapolating) | After (W2) |
+|---|---|---|
+| 1.5×T\_MAX | 37% | 4.4% |
+| 2×T\_MAX | 227% | 7.1% |
+
+**Fix for Case 3 (diffusivity)** — not implemented. Requires adding `α` as a sixth network input and retraining, which is structurally identical to how `Lx` and `Ly` were added in Phase 3.
+
+---
+
 ## Improvements
 
 ### 3D Extension
